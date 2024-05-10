@@ -31,7 +31,7 @@ import {
     ExportKind,
     Expression,
     ExpressionStatement,
-    extensionFromPath,
+    Extension,
     ExternalModuleReference,
     factory,
     fileShouldUseJavaScriptRequire,
@@ -133,6 +133,7 @@ import {
     RefactorEditInfo,
     RequireOrImportCall,
     resolvePath,
+    ScriptKind,
     ScriptTarget,
     skipAlias,
     some,
@@ -147,6 +148,7 @@ import {
     textChanges,
     TransformFlags,
     tryCast,
+    tryGetExtensionFromPath,
     TypeAliasDeclaration,
     TypeChecker,
     TypeNode,
@@ -442,7 +444,7 @@ function createRequireCall(moduleSpecifier: StringLiteralLike): CallExpression {
 export function moduleSpecifierFromImport(i: SupportedImport): StringLiteralLike {
     return (i.kind === SyntaxKind.ImportDeclaration ? i.moduleSpecifier
         : i.kind === SyntaxKind.ImportEqualsDeclaration ? i.moduleReference.expression
-        : i.initializer.arguments[0]);
+            : i.initializer.arguments[0]);
 }
 
 /** @internal */
@@ -771,7 +773,18 @@ export function createNewFileName(oldFile: SourceFile, program: Program, host: L
     if (toMove) {
         const usage = getUsageInfo(oldFile, toMove.all, checker);
         const currentDirectory = getDirectoryPath(oldFile.fileName);
-        const extension = extensionFromPath(oldFile.fileName);
+        let extension = tryGetExtensionFromPath(oldFile.fileName);
+        if (!extension) {
+            const scriptKind = host.getScriptKind?.(oldFile.fileName);
+            switch (scriptKind) {
+                case ScriptKind.TS: extension = Extension.Ts; break;
+                case ScriptKind.TSX: extension = Extension.Tsx; break;
+                case ScriptKind.JS: extension = Extension.Js; break;
+                case ScriptKind.JSX: extension = Extension.Jsx; break;
+                case ScriptKind.JSON: extension = Extension.Json; break;
+                default: extension = Extension.Ts; break;
+            }
+        }
         const newFileName = combinePaths(
             // new file is always placed in the same directory as the old file
             currentDirectory,
@@ -954,7 +967,7 @@ export function getUsageInfo(oldFile: SourceFile, toMove: readonly Statement[], 
 
 function makeUniqueFilename(proposedFilename: string, extension: string, inDirectory: string, host: LanguageServiceHost): string {
     let newFilename = proposedFilename;
-    for (let i = 1;; i++) {
+    for (let i = 1; ; i++) {
         const name = combinePaths(inDirectory, newFilename + extension);
         if (!host.fileExists(name)) return newFilename;
         newFilename = `${proposedFilename}.${i}`;
