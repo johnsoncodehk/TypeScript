@@ -31,7 +31,7 @@ import {
     ExportKind,
     Expression,
     ExpressionStatement,
-    extensionFromPath,
+    Extension,
     ExternalModuleReference,
     factory,
     fileShouldUseJavaScriptRequire,
@@ -133,6 +133,7 @@ import {
     RefactorEditInfo,
     RequireOrImportCall,
     resolvePath,
+    ScriptKind,
     ScriptTarget,
     skipAlias,
     some,
@@ -147,6 +148,7 @@ import {
     textChanges,
     TransformFlags,
     tryCast,
+    tryGetExtensionFromPath,
     TypeAliasDeclaration,
     TypeChecker,
     TypeNode,
@@ -771,7 +773,18 @@ export function createNewFileName(oldFile: SourceFile, program: Program, host: L
     if (toMove) {
         const usage = getUsageInfo(oldFile, toMove.all, checker);
         const currentDirectory = getDirectoryPath(oldFile.fileName);
-        const extension = extensionFromPath(oldFile.fileName);
+        let extension = tryGetExtensionFromPath(oldFile.fileName);
+        if (!extension) {
+            const scriptKind = host.getScriptKind?.(oldFile.fileName);
+            switch (scriptKind) {
+                case ScriptKind.TS: extension = Extension.Ts; break;
+                case ScriptKind.TSX: extension = Extension.Tsx; break;
+                case ScriptKind.JS: extension = Extension.Js; break;
+                case ScriptKind.JSX: extension = Extension.Jsx; break;
+                case ScriptKind.JSON: extension = Extension.Json; break;
+                default: extension = Extension.Ts; break;
+            }
+        }
         const newFileName = combinePaths(
             // new file is always placed in the same directory as the old file
             currentDirectory,
